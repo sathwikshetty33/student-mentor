@@ -21,6 +21,21 @@ This API provides endpoints for a mentor-student platform where:
 - **Mentors** can register, login, manage profiles, create tests, and assign scores
 - **Authentication** is handled via Django REST Framework Token Authentication
 - **Permissions** are role-based (Student vs Mentor)
+- **Application is fully dockerized** for easy deployment and development
+
+## Quick Start
+
+To run the application:
+
+```bash
+cd core
+docker-compose up
+```
+
+The entire application stack is containerized using Docker, including:
+- Django REST API backend
+- Database (PostgreSQL/SQLite)
+- All dependencies and configurations
 
 ## Database Schema
 
@@ -193,6 +208,8 @@ Authorization: Token <your_token_here>
 ```
 http://localhost:8000/portal/
 ```
+
+**Note:** When running via Docker Compose, the application will be available at the above URL after executing `docker-compose up` from the `core` directory.
 
 ## API Endpoints
 
@@ -1113,6 +1130,7 @@ curl -X POST http://localhost:8000/portal/test-scores/ \
 
 ## Notes
 
+- The entire application is **fully dockerized** - simply run `cd core && docker-compose up` to start
 - All endpoints require authentication except registration and login
 - Students can only update their own profiles
 - Mentors have full access to test and test score management
@@ -1124,21 +1142,47 @@ curl -X POST http://localhost:8000/portal/test-scores/ \
 - Database schema is normalized to Fifth Normal Form (5NF) for optimal data integrity
 - Foreign key constraints ensure referential integrity across all relationships
 - Cascade deletions maintain data consistency when users or tests are removed
+- Docker Compose handles all service orchestration and dependency management
 
 ## Database Migration Commands
 
-To set up the database schema, run the following Django commands:
+The application is fully dockerized. To set up and run the complete system:
 
 ```bash
-# Create migrations
-python manage.py makemigrations portal
+# Navigate to the core directory
+cd core
 
-# Apply migrations
+# Start the entire application stack
+docker-compose up
+
+# For development with live reload
+docker-compose up --build
+
+# Run in background
+docker-compose up -d
+```
+
+### Manual Database Setup (if needed)
+If you need to run migrations manually inside the container:
+
+```bash
+# Access the Django container
+docker-compose exec web bash
+
+# Inside the container, run migrations
+python manage.py makemigrations portal
 python manage.py migrate
 
 # Create superuser (optional)
 python manage.py createsuperuser
 ```
+
+### Docker Services
+The Docker Compose setup includes:
+- **Web Service**: Django REST API application
+- **Database Service**: PostgreSQL/SQLite database
+- **Volume Mounts**: For persistent data and development
+- **Network Configuration**: For service communication
 
 ## Model Relationships Summary
 
