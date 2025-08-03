@@ -2,16 +2,17 @@
 
 ## Table of Contents
 1. [Overview](#overview)
-2. [Authentication](#authentication)
-3. [Base URL](#base-url)
-4. [API Endpoints](#api-endpoints)
+2. [Database Schema](#database-schema)
+3. [Authentication](#authentication)
+4. [Base URL](#base-url)
+5. [API Endpoints](#api-endpoints)
    - [Authentication Endpoints](#authentication-endpoints)
    - [Student Profile Endpoints](#student-profile-endpoints)
    - [Mentor Profile Endpoints](#mentor-profile-endpoints)
    - [Test Management Endpoints](#test-management-endpoints)
    - [Test Score Management Endpoints](#test-score-management-endpoints)
-5. [Error Responses](#error-responses)
-6. [Testing Guide](#testing-guide)
+6. [Error Responses](#error-responses)
+7. [Testing Guide](#testing-guide)
 
 ## Overview
 
@@ -20,6 +21,163 @@ This API provides endpoints for a mentor-student platform where:
 - **Mentors** can register, login, manage profiles, create tests, and assign scores
 - **Authentication** is handled via Django REST Framework Token Authentication
 - **Permissions** are role-based (Student vs Mentor)
+
+## Database Schema
+
+The database is designed in **Fifth Normal Form (5NF)**, ensuring optimal data organization with no redundancy and proper separation of concerns. The schema consists of the following entities:
+
+### Entity Relationship Diagram
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│      User       │         │      Test       │
+├─────────────────┤         ├─────────────────┤
+│ id (PK)         │         │ id (PK)         │
+│ username        │         │ name            │
+│ email           │         │ description     │
+│ first_name      │         │ created_at      │
+│ last_name       │         │ updated_at      │
+│ password        │         └─────────────────┘
+│ is_active       │                   │
+│ date_joined     │                   │
+└─────────────────┘                   │
+         │                            │
+         │                            │
+    ┌────┴────┐                       │
+    │         │                       │
+    ▼         ▼                       │
+┌─────────────────┐         ┌─────────────────┐
+│ StudentProfile  │         │ MentorProfile   │
+├─────────────────┤         ├─────────────────┤
+│ id (PK)         │         │ id (PK)         │
+│ user_id (FK)    │         │ user_id (FK)    │
+│ leetcode        │         │ expertise       │
+│ github          │         │ github          │
+│ dateJoined      │         │ dateJoined      │
+│ photo           │         │ photo           │
+│ bio             │         │ bio             │
+└─────────────────┘         └─────────────────┘
+         │                            
+         │                            
+         ▼                            
+┌─────────────────┐                   
+│   TestScore     │                   
+├─────────────────┤                   
+│ id (PK)         │                   
+│ student_id (FK) │◄──────────────────┘
+│ test_id (FK)    │◄──────────────────┘
+│ score           │
+│ date_taken      │
+└─────────────────┘
+```
+
+### Table Definitions
+
+#### 1. User (Django's Built-in User Model)
+```sql
+CREATE TABLE auth_user (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username VARCHAR(150) UNIQUE NOT NULL,
+    email VARCHAR(254) NOT NULL,
+    first_name VARCHAR(150),
+    last_name VARCHAR(150),
+    password VARCHAR(128) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_staff BOOLEAN DEFAULT FALSE,
+    is_superuser BOOLEAN DEFAULT FALSE,
+    date_joined DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_login DATETIME
+);
+```
+
+#### 2. StudentProfile
+```sql
+CREATE TABLE portal_studentprofile (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER UNIQUE NOT NULL,
+    leetcode VARCHAR(100) NOT NULL,
+    github VARCHAR(100) NOT NULL,
+    dateJoined DATETIME DEFAULT CURRENT_TIMESTAMP,
+    photo VARCHAR(100),
+    bio TEXT,
+    FOREIGN KEY (user_id) REFERENCES auth_user(id) ON DELETE CASCADE
+);
+```
+
+#### 3. MentorProfile
+```sql
+CREATE TABLE portal_mentorprofile (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER UNIQUE NOT NULL,
+    expertise VARCHAR(100) NOT NULL,
+    github VARCHAR(100) NOT NULL,
+    dateJoined DATETIME DEFAULT CURRENT_TIMESTAMP,
+    photo VARCHAR(100),
+    bio TEXT,
+    FOREIGN KEY (user_id) REFERENCES auth_user(id) ON DELETE CASCADE
+);
+```
+
+#### 4. Test
+```sql
+CREATE TABLE portal_test (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### 5. TestScore
+```sql
+CREATE TABLE portal_testscore (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    test_id INTEGER NOT NULL,
+    score INTEGER NOT NULL CHECK (score >= 0 AND score <= 100),
+    date_taken DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES portal_studentprofile(id) ON DELETE CASCADE,
+    FOREIGN KEY (test_id) REFERENCES portal_test(id) ON DELETE CASCADE,
+    UNIQUE(student_id, test_id)
+);
+```
+
+### Database Normalization (5NF)
+
+This schema achieves **Fifth Normal Form (5NF)** through:
+
+1. **First Normal Form (1NF)**: All attributes contain atomic values with no repeating groups
+2. **Second Normal Form (2NF)**: All non-key attributes are fully functionally dependent on primary keys
+3. **Third Normal Form (3NF)**: No transitive dependencies exist between non-key attributes
+4. **Fourth Normal Form (4NF)**: No multi-valued dependencies exist
+5. **Fifth Normal Form (5NF)**: All join dependencies are implied by candidate keys
+
+**Key Design Principles:**
+- **Separation of Concerns**: User authentication data is separated from profile-specific data
+- **Role-Based Design**: StudentProfile and MentorProfile are separate entities with role-specific attributes
+- **Relationship Integrity**: TestScore properly links students to tests without redundancy
+- **Constraint Enforcement**: Unique constraints prevent duplicate test scores per student-test combination
+- **Referential Integrity**: Foreign key relationships maintain data consistency
+
+### Indexes and Constraints
+
+**Primary Keys:**
+- All tables have auto-incrementing integer primary keys
+
+**Foreign Key Relationships:**
+- `StudentProfile.user_id` → `User.id` (One-to-One)
+- `MentorProfile.user_id` → `User.id` (One-to-One)
+- `TestScore.student_id` → `StudentProfile.id` (Many-to-One)
+- `TestScore.test_id` → `Test.id` (Many-to-One)
+
+**Unique Constraints:**
+- `User.username` (system-enforced)
+- `Test.name` (business logic enforced)
+- `TestScore(student_id, test_id)` (prevents duplicate scores)
+
+**Check Constraints:**
+- `TestScore.score` must be between 0 and 100
 
 ## Authentication
 
@@ -963,3 +1121,38 @@ curl -X POST http://localhost:8000/portal/test-scores/ \
 - Test names must be unique (case-insensitive)
 - Test scores must be between 0-100
 - No duplicate test scores allowed for same student-test combination
+- Database schema is normalized to Fifth Normal Form (5NF) for optimal data integrity
+- Foreign key constraints ensure referential integrity across all relationships
+- Cascade deletions maintain data consistency when users or tests are removed
+
+## Database Migration Commands
+
+To set up the database schema, run the following Django commands:
+
+```bash
+# Create migrations
+python manage.py makemigrations portal
+
+# Apply migrations
+python manage.py migrate
+
+# Create superuser (optional)
+python manage.py createsuperuser
+```
+
+## Model Relationships Summary
+
+- **User ↔ StudentProfile**: One-to-One relationship
+- **User ↔ MentorProfile**: One-to-One relationship  
+- **StudentProfile ↔ TestScore**: One-to-Many relationship
+- **Test ↔ TestScore**: One-to-Many relationship
+- **User and Profile separation**: Enables clean role-based access control
+- **TestScore junction table**: Links students and tests with additional score metadata
+
+## Data Integrity Features
+
+- **Referential Integrity**: Foreign key constraints prevent orphaned records
+- **Unique Constraints**: Prevent duplicate usernames and test scores per student-test pair
+- **Check Constraints**: Validate score ranges (0-100)
+- **Cascade Deletions**: Automatically clean up related records when parent entities are deleted
+- **Timestamp Tracking**: Automatic creation and update timestamps for audit trails
