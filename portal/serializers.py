@@ -37,7 +37,37 @@ class StudentRegistrationSerializer(serializers.ModelSerializer):
         # Create student profile
         student_profile = StudentProfile.objects.create(user=user, **validated_data)
         return student_profile
-
+class StudentProfileUpdateSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
+    email = serializers.EmailField(required=False)
+    
+    class Meta:
+        model = StudentProfile
+        fields = ['leetcode', 'github', 'photo', 'bio', 'first_name', 'last_name', 'email']
+    
+    def update(self, instance, validated_data):
+        # Extract user fields
+        user_fields = {}
+        if 'first_name' in validated_data:
+            user_fields['first_name'] = validated_data.pop('first_name')
+        if 'last_name' in validated_data:
+            user_fields['last_name'] = validated_data.pop('last_name')
+        if 'email' in validated_data:
+            user_fields['email'] = validated_data.pop('email')
+        
+        # Update user fields if any
+        if user_fields:
+            for field, value in user_fields.items():
+                setattr(instance.user, field, value)
+            instance.user.save()
+        
+        # Update profile fields
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        
+        return instance
 class MentorRegistrationSerializer(serializers.ModelSerializer):
     username = serializers.CharField(write_only=True)
     email = serializers.EmailField(write_only=True)
@@ -66,7 +96,37 @@ class MentorRegistrationSerializer(serializers.ModelSerializer):
         # Create mentor profile
         mentor_profile = MentorProfile.objects.create(user=user, **validated_data)
         return mentor_profile
-
+class MentorProfileUpdateSerializer(serializers.ModelSerializer):
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
+    email = serializers.EmailField(required=False)
+    
+    class Meta:
+        model = MentorProfile
+        fields = ['expertise', 'github', 'photo', 'bio', 'first_name', 'last_name', 'email']
+    
+    def update(self, instance, validated_data):
+        # Extract user fields
+        user_fields = {}
+        if 'first_name' in validated_data:
+            user_fields['first_name'] = validated_data.pop('first_name')
+        if 'last_name' in validated_data:
+            user_fields['last_name'] = validated_data.pop('last_name')
+        if 'email' in validated_data:
+            user_fields['email'] = validated_data.pop('email')
+        
+        # Update user fields if any
+        if user_fields:
+            for field, value in user_fields.items():
+                setattr(instance.user, field, value)
+            instance.user.save()
+        
+        # Update profile fields
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        instance.save()
+        
+        return instance
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField()
@@ -181,7 +241,18 @@ class TestScoreSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestScore
         fields = ['id', 'test', 'score', 'date_taken']
-
+class TestUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Test
+        fields = ['name', 'description']
+    
+    def validate_name(self, value):
+        # Check for duplicate name excluding current instance
+        if self.instance and Test.objects.filter(name__iexact=value).exclude(id=self.instance.id).exists():
+            raise serializers.ValidationError("A test with this name already exists")
+        elif not self.instance and Test.objects.filter(name__iexact=value).exists():
+            raise serializers.ValidationError("A test with this name already exists")
+        return value
 
 class StudentProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)

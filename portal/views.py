@@ -16,6 +16,11 @@ class StudentRegistrationAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = [] 
     def post(self, request):
+        uername = request.data.get('username')
+        if User.objects.filter(username=uername).exists():
+            return Response({
+                'error': 'Username already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
         serializer = StudentRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             student_profile = serializer.save()
@@ -39,6 +44,11 @@ class MentorRegistrationAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
     def post(self, request):
+        uername = request.data.get('username')
+        if User.objects.filter(username=uername).exists():
+            return Response({
+                'error': 'Username already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
         serializer = MentorRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             mentor_profile = serializer.save()
@@ -98,10 +108,10 @@ class LoginAPIView(APIView):
 
 class StudentProfileAPIView(APIView):
     """
-    Get student profile with test scores
-    Accessible by the student themselves or any mentor
+    Get and update student profile with test scores
+    Accessible by the student themselves or any mentor (GET)
+    Only student can update their own profile (PUT)
     """
-
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
     
@@ -131,10 +141,43 @@ class StudentProfileAPIView(APIView):
         
         serializer = StudentProfileSerializer(student_profile)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
+    
+    def put(self, request, student_id=None):
+        uername = request.data.get('username')
+        if User.objects.filter(username=uername).exists():
+            return Response({
+                'error': 'Username already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        user = request.user
+        
+        if student_id:
+            # If student_id is provided, check if it's the same user
+            student_profile = get_object_or_404(StudentProfile, id=student_id)
+            if student_profile.user != user:
+                return Response({
+                    'error': 'You can only update your own profile'
+                }, status=status.HTTP_403_FORBIDDEN)
+        else:
+            # If no student_id provided, update current user's profile
+            try:
+                student_profile = StudentProfile.objects.get(user=user)
+            except StudentProfile.DoesNotExist:
+                return Response({
+                    'error': 'User is not a student'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = StudentProfileUpdateSerializer(student_profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_profile = serializer.save()
+            response_serializer = StudentProfileSerializer(updated_profile)
+            return Response({
+                'message': 'Profile updated successfully',
+                'data': response_serializer.data
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class MentorProfileAPIView(APIView):
     """
-    Get mentor profile
+    Get and update mentor profile
     """
     authentication_classes = [TokenAuthentication]
     permission_classes = [IsAuthenticated]
@@ -148,7 +191,29 @@ class MentorProfileAPIView(APIView):
             return Response({
                 'error': 'User is not a mentor'
             }, status=status.HTTP_400_BAD_REQUEST)
-
+    
+    def put(self, request):
+        uername = request.data.get('username')
+        if User.objects.filter(username=uername).exists():
+            return Response({
+                'error': 'Username already exists'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            mentor_profile = MentorProfile.objects.get(user=request.user)
+        except MentorProfile.DoesNotExist:
+            return Response({
+                'error': 'User is not a mentor'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = MentorProfileUpdateSerializer(mentor_profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_profile = serializer.save()
+            response_serializer = MentorProfileSerializer(updated_profile)
+            return Response({
+                'message': 'Profile updated successfully',
+                'data': response_serializer.data
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 class AllStudentsAPIView(APIView):
     """
     Get all students (only accessible by mentors)
@@ -168,7 +233,53 @@ class AllStudentsAPIView(APIView):
         students = StudentProfile.objects.all()
         serializer = StudentProfileSerializer(students, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+class TestDetailAPIView(APIView):
+    """
+    Get, update, and delete specific tests (mentor only for PUT/DELETE)
+    """
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
     
+    def get(self, request, test_id):
+        test = get_object_or_404(Test, id=test_id)
+        serializer = TestSerializer(test)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def put(self, request, test_id):
+        # Check if user is a mentor
+        try:
+            MentorProfile.objects.get(user=request.user)
+        except MentorProfile.DoesNotExist:
+            return Response({
+                'error': 'Only mentors can update tests'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        test = get_object_or_404(Test, id=test_id)
+        serializer = TestUpdateSerializer(test, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_test = serializer.save()
+            response_serializer = TestSerializer(updated_test)
+            return Response({
+                'message': 'Test updated successfully',
+                'data': response_serializer.data
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, test_id):
+        # Check if user is a mentor
+        try:
+            MentorProfile.objects.get(user=request.user)
+        except MentorProfile.DoesNotExist:
+            return Response({
+                'error': 'Only mentors can delete tests'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        test = get_object_or_404(Test, id=test_id)
+        test_name = test.name
+        test.delete()
+        return Response({
+            'message': f'Test "{test_name}" deleted successfully'
+        }, status=status.HTTP_200_OK)  
 
 class TestListAPIView(APIView):
     """

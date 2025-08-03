@@ -9,7 +9,8 @@ urlpatterns = [
     path('profile/student/<int:student_id>/', StudentProfileAPIView.as_view(), name='student-profile-detail'),
     path('profile/mentor/', MentorProfileAPIView.as_view(), name='mentor-profile'),
     path('students/', AllStudentsAPIView.as_view(), name='all-students'),
-        path('tests/', TestListAPIView.as_view(), name='test-list'),
+    path('tests/', TestListAPIView.as_view(), name='test-list'),
+    path('tests/<int:test_id>/', TestDetailAPIView.as_view(), name='test-detail'),
     path('test-scores/', TestScoreAPIView.as_view(), name='add-test-score'),
     path('test-scores/<int:score_id>/', TestScoreAPIView.as_view(), name='update-delete-test-score'),
 ]
